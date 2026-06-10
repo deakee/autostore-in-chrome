@@ -97,9 +97,46 @@ async function autoFetchBridgeToken(port) {
   }
 }
 
+/** Is OUR daemon answering on this port? (vs. a foreign server / nothing). */
+async function probeHealth(port) {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/health`, { cache: "no-store" });
+    if (!res.ok) return false;
+    const j = await res.json();
+    return typeof j?.daemonVersion === "string";
+  } catch {
+    return false; // refused, or a foreign server returning non-JSON
+  }
+}
+
+/**
+ * Find the live daemon. It auto-moves off a busy 43117 and writes its real
+ * port to a file we can't read from an extension, so we probe /health across
+ * the candidate range (same window the daemon walks). Returns a port or null.
+ */
+async function discoverPort(preferred) {
+  const seen = new Set();
+  const candidates = [preferred];
+  for (let p = DEFAULT_PORT; p <= DEFAULT_PORT + 13; p++) candidates.push(p);
+  for (const p of candidates) {
+    if (seen.has(p)) continue;
+    seen.add(p);
+    if (await probeHealth(p)) return p;
+  }
+  return null;
+}
+
 async function connect() {
   clearTimeout(reconnectTimer);
   let { token, port } = await getConfig();
+
+  // Follow the daemon if it moved off a busy 43117.
+  const found = await discoverPort(port);
+  if (found && found !== port) {
+    port = found;
+    await chrome.storage.local.set({ bridgePort: port });
+    console.log(`[autostore-in-chrome] daemon found on port ${port}`);
+  }
 
   // Always run /pair when we don't have user info yet — covers the case
   // where an older build of the extension stored a bridgeToken without a
