@@ -12,11 +12,27 @@
 > **Rule:** if you spent 3+ tool calls on a workflow that could be one macro, encode it in `mac/AutoStore/Sources/Services/PlatformKnowledge.swift` + register the tool in `LocalLLMService.swift` before committing. Push so the next AutoStore release ships with that knowledge.
 
 
-**Chrome extension + local HTTP/WS daemon that lets the AutoStore app drive
+**Chrome extension + local HTTP/WS server that lets the AutoStore app drive
 the user's real Chrome** — no separate Playwright browser, no cookie
 transplant, no fresh logins. Alongside `browser-mcp` (which gives a *scripted*
 Chromium), this gives AutoStore the user's *actual* Chrome with all its
 existing sessions (1688, eBay, Amazon, Etsy, …).
+
+> ## ⚠️ The shipped server is NATIVE SWIFT, in-process (2026-06-11)
+> A user's AutoStore is **Swift + macros only — no Node, no Go, no child
+> process**. The loopback HTTP+WebSocket server now lives inside the Mac app:
+> `mac/AutoStore/Sources/Services/InChromeServer.swift` (Network.framework +
+> a hand-rolled RFC6455 WebSocket). The app *is* the server the extension
+> connects to. Nothing to install or spawn → fixes the whole `-1004` class of
+> bugs (no external daemon to be missing, no `node` dependency).
+>
+> **`daemon/` (Node) and `daemon-go/` (Go) are R&D reference only** — kept as
+> the iteration playground / protocol spec. They are NOT shipped to users.
+> When you change the wire protocol, change `InChromeServer.swift` (it's what
+> ships) and keep the others in sync if you use them for testing.
+>
+> The HTTP API, wire protocol, and method list below are unchanged — the Swift
+> server is byte-compatible with what the extension and `InChromeClient` expect.
 
 ## No Claude Code dependency
 
